@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://thoracicai-backend.onrender.com/api/:path*"
+      "destination": "https://thoracicai-backend-9f9r.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",

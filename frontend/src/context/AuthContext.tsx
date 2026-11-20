@@ -10,6 +10,7 @@ import {
 } from '../services/api';
 import {
   configureSupabase,
+  getSupabaseConfigError,
   isSupabaseConfigured,
   supabase,
 } from '../services/supabase';
@@ -118,6 +119,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      if (!isSupabaseConfigured && import.meta.env.PROD) {
+        const configErr = getSupabaseConfigError();
+        if (configErr) {
+          throw new Error(configErr);
+        }
+      }
+
       // Local / Dev token fallback for development and automated testing
       const dev = await requestDevToken(
         email,
@@ -161,6 +169,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (sbErr) {
           if (import.meta.env.PROD) throw sbErr;
           console.warn('[ThoracicAI] Supabase auth fallback to dev token:', sbErr);
+        }
+      }
+
+      if (!isSupabaseConfigured && import.meta.env.PROD) {
+        const configErr = getSupabaseConfigError();
+        if (configErr) {
+          throw new Error(configErr);
         }
       }
 

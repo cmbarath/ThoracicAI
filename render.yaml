@@ -27,4 +27,4 @@ services:
       - key: SUPABASE_JWT_SECRET
         sync: false
       - key: CORS_ORIGINS
-        value: '["https://thoracicai.vercel.app"]'
+        value: '["https://thoracic-ai.vercel.app", "https://thoracicai.vercel.app"]'

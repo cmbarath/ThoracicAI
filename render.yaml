@@ -8,7 +8,7 @@ services:
     env: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: standard # 2 GB+ RAM recommended for PyTorch DenseNet121 inference
+    plan: free # Free tier (can be upgraded to Starter/Standard if increased concurrency is required)
     region: oregon
     healthCheckPath: /api/health
     envVars:

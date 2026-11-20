@@ -1,10 +1,14 @@
-"""FastAPI router implementing all required REST endpoints."""
+"""FastAPI router implementing core REST endpoints for inference and metrics."""
 
-from typing import List
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
 import torch
 
 from ..config import settings
+from ..core.auth import get_optional_user
+from ..db.session import get_db
+from ..models import Profile
 from ..schemas import (
     AllMetricsResponse,
     HealthResponse,
@@ -14,6 +18,8 @@ from ..schemas import (
     PreprocessingInfo,
     SampleScanInfo
 )
+from ..services.audit import log_audit_event
+from ..services.case_service import CaseService
 from ..services.inference import ModelRegistry, run_inference
 from ..services.metrics_service import get_all_metrics
 from ..services.sample_scans import get_sample_scan_slices
@@ -102,7 +108,9 @@ async def predict_cancer(
     files: List[UploadFile] = File(
         ...,
         description="One or more CT scan slice images (PNG, JPG, TIFF, BMP, WebP)"
-    )
+    ),
+    current_user: Optional[Profile] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
 ) -> PredictionResponse:
     """Execute Cancer DenseNet121 inference with Cancer Crop V2 and arithmetic mean aggregation."""
     validated_payloads = await validate_upload_files(files, dataset_name="cancer")
@@ -118,6 +126,35 @@ async def predict_cancer(
             detail=f"Inference execution failed: {err}"
         ) from err
 
+    if current_user:
+        case = CaseService.create_and_complete_case(
+            db=db,
+            owner=current_user,
+            dataset="cancer",
+            number_of_slices=result.number_of_slices,
+            predicted_class=result.predicted_class,
+            mean_scores=result.class_scores,
+            slice_predictions=result.slice_predictions,
+            inference_duration_ms=result.inference_duration_ms or 0
+        )
+        result.case_id = case.case_reference
+        result.case_reference = case.case_reference
+        result.case_database_id = case.id
+
+        log_audit_event(
+            db=db,
+            action="CASE_CREATE",
+            resource_type="case",
+            actor=current_user,
+            resource_id=case.id,
+            details={
+                "case_reference": case.case_reference,
+                "dataset": "cancer",
+                "predicted_class": result.predicted_class,
+                "number_of_slices": result.number_of_slices
+            }
+        )
+
     return result
 
 
@@ -131,7 +168,9 @@ async def predict_covid(
     files: List[UploadFile] = File(
         ...,
         description="One or more CT scan slice images (PNG, JPG, TIFF, BMP, WebP)"
-    )
+    ),
+    current_user: Optional[Profile] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
 ) -> PredictionResponse:
     """Execute COVID / Pulmonary DenseNet121 inference with arithmetic mean aggregation."""
     validated_payloads = await validate_upload_files(files, dataset_name="covid")
@@ -146,6 +185,35 @@ async def predict_covid(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Inference execution failed: {err}"
         ) from err
+
+    if current_user:
+        case = CaseService.create_and_complete_case(
+            db=db,
+            owner=current_user,
+            dataset="covid",
+            number_of_slices=result.number_of_slices,
+            predicted_class=result.predicted_class,
+            mean_scores=result.class_scores,
+            slice_predictions=result.slice_predictions,
+            inference_duration_ms=result.inference_duration_ms or 0
+        )
+        result.case_id = case.case_reference
+        result.case_reference = case.case_reference
+        result.case_database_id = case.id
+
+        log_audit_event(
+            db=db,
+            action="CASE_CREATE",
+            resource_type="case",
+            actor=current_user,
+            resource_id=case.id,
+            details={
+                "case_reference": case.case_reference,
+                "dataset": "covid",
+                "predicted_class": result.predicted_class,
+                "number_of_slices": result.number_of_slices
+            }
+        )
 
     return result
 
@@ -179,7 +247,11 @@ def get_sample_scan_info(dataset: str) -> SampleScanInfo:
 
 
 @router.post("/predict/sample/{dataset}", response_model=PredictionResponse, tags=["Demo Samples"])
-def predict_sample_scan(dataset: str) -> PredictionResponse:
+def predict_sample_scan(
+    dataset: str,
+    current_user: Optional[Profile] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+) -> PredictionResponse:
     """Run prediction directly on synthetic sample CT slices for testing."""
     if dataset not in ("cancer", "covid"):
         raise HTTPException(
@@ -188,4 +260,21 @@ def predict_sample_scan(dataset: str) -> PredictionResponse:
         )
 
     slices = get_sample_scan_slices(dataset)
-    return run_inference(dataset_name=dataset, image_payloads=slices)
+    result = run_inference(dataset_name=dataset, image_payloads=slices)
+
+    if current_user:
+        case = CaseService.create_and_complete_case(
+            db=db,
+            owner=current_user,
+            dataset=dataset,
+            number_of_slices=result.number_of_slices,
+            predicted_class=result.predicted_class,
+            mean_scores=result.class_scores,
+            slice_predictions=result.slice_predictions,
+            inference_duration_ms=result.inference_duration_ms or 0
+        )
+        result.case_id = case.case_reference
+        result.case_reference = case.case_reference
+        result.case_database_id = case.id
+
+    return result

@@ -1,0 +1,30 @@
+# ============================================================
+# Render Blueprint Specification for ThoracicAI Platform
+# ============================================================
+
+services:
+  - type: web
+    name: thoracicai-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: standard # 2 GB+ RAM recommended for PyTorch DenseNet121 inference
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false # Set securely in Render Dashboard (Supabase PostgreSQL connection string)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["https://thoracicai.vercel.app"]'

@@ -65,3 +65,7 @@ Thumbs.db
 *.dcm
 *.nii
 *.nii.gz
+*.db
+backend/storage/
+test-results/
+playwright-report/

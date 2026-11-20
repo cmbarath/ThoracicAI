@@ -1,15 +1,16 @@
-# ThoracicAI — CT Research & Classification Workbench
+# ThoracicAI — Secure CT Research & Classification Platform
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![React](https://img.shields.io/badge/React-19.0+-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.0+-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-24%20Passed-success)](#testing)
+[![PyTest](https://img.shields.io/badge/PyTest-44%20Passed-success)](https://docs.pytest.org/)
+[![Playwright](https://img.shields.io/badge/Playwright-6%20Passed-success)](https://playwright.dev/)
 
-**ThoracicAI** is a full-stack, portfolio-grade clinical AI research platform designed for multi-slice chest CT classification. It integrates two independently trained ImageNet-pretrained **DenseNet-121** convolutional neural networks for thoracic disease identification, supported by leakage-group validation and arithmetic mean softmax score aggregation.
+**ThoracicAI** is an enterprise-grade clinical AI research platform for multi-slice chest CT classification. It integrates two independently trained ImageNet-pretrained **DenseNet-121** deep convolutional neural networks with leakage-group cross-validation, arithmetic mean softmax score aggregation, multi-user Supabase authentication, PostgreSQL Row-Level Security (RLS), and publication-grade ReportLab PDF generation.
 
-> **Research Prototype Disclaimer**: This application is strictly an academic research and algorithmic demonstration tool. It is not a certified medical device and must never be used for diagnostic determinations, clinical decision-making, or treatment planning.
+> **Research Prototype Disclaimer**: This application is strictly an academic research and algorithmic demonstration workbench. It is **not** a certified medical device and must never be used for diagnostic determinations, clinical decision-making, or treatment planning. Softmax outputs represent uncalibrated neural network activations, not clinical diagnostic probabilities.
 
 ---
 
@@ -17,35 +18,43 @@
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client Interface (React + Vite + TypeScript)"]
-        UI["Modern Research Workbench"]
-        Uploader["Multi-Slice Static CT Ingestion"]
-        Viewer["Slice Inspection & Score Distribution"]
-        Exporter["CSV & Local Summary Report Export"]
+    subgraph Client ["Client Interface (React 19 + TypeScript + Vite + Tailwind CSS)"]
+        UI["Secure Research Workbench"]
+        AuthModal["Supabase Auth / JWT Session Manager"]
+        Workflow["Multi-Slice Ingestion (Cancer & COVID)"]
+        CaseRegistry["Persistent Case Registry & Audits"]
+        ReportCentre["Report Centre (PDF, CSV & JSON Downloads)"]
+        AdminDashboard["Superuser Admin & Audit Explorer"]
     end
 
-    subgraph API ["Backend REST API (FastAPI)"]
-        Router["/api/predict/cancer\n/api/predict/covid\n/api/health\n/api/models\n/api/metrics"]
-        Validator["Static Image Decoding & Geometry Verification"]
-        Registry["ModelRegistry (Singleton In-Memory Cache)"]
+    subgraph API ["Backend Cloud API (FastAPI + SQLAlchemy 2.0)"]
+        AuthRouter["/api/auth (me, dev-token, profile update)"]
+        InferenceRouter["/api/predict/cancer\n/api/predict/covid\n/api/predict/sample"]
+        CaseRouter["/api/cases (CRUD, pagination, search, user isolation)"]
+        ReportRouter["/api/reports (ReportLab PDF, CSV, JSON signed URLs)"]
+        AdminRouter["/api/admin (telemetry, users, status, roles, audit logs)"]
+        Registry["ModelRegistry (Singleton In-Memory Model Cache)"]
     end
 
-    subgraph Preprocessing ["Standardized Preprocessing Pipeline"]
+    subgraph DeepLearning ["PyTorch ML Inference Engine"]
         Alpha["Alpha Channel Composite onto Black"]
         Crop["Cancer Crop V2: Top 12%, Bottom 10%, Left/Right 6%"]
         Pad["Aspect-Ratio Preserved Lanczos Padding (224x224)"]
-        Norm["ImageNet Channel Normalization"]
-    end
-
-    subgraph DeepLearning ["PyTorch Deep Learning Inference"]
+        Norm["ImageNet Normalization (Mean & Std)"]
         NetCancer["DenseNet121 Cancer Head (3 classes)"]
         NetCovid["DenseNet121 COVID Head (3 classes)"]
         MeanAgg["Arithmetic Mean Softmax Aggregation:\n p_case = (1/S) * sum(p_slice)"]
     end
 
-    UI -->|Multipart Upload| Router
-    Router --> Validator
-    Validator --> Alpha
+    subgraph Storage ["Private Storage & PostgreSQL Database"]
+        Postgres[("Supabase PostgreSQL 16\n(RLS User Isolation)")]
+        DocStore["Encrypted Storage / Supabase Storage\n(Signed Short-Lived URLs)"]
+        AuditLog[("Immutable Audit Events Table")]
+    end
+
+    UI --> AuthRouter
+    Workflow --> InferenceRouter
+    InferenceRouter --> Alpha
     Alpha --> Crop
     Alpha --> Pad
     Crop --> Pad
@@ -55,180 +64,139 @@ flowchart TD
     Registry --> NetCovid
     NetCancer --> MeanAgg
     NetCovid --> MeanAgg
-    MeanAgg -->|Structured JSON Response| Viewer
+    MeanAgg --> Postgres
+    InferenceRouter --> AuditLog
+    CaseRegistry --> CaseRouter
+    ReportCentre --> ReportRouter
+    ReportRouter --> DocStore
+    AdminDashboard --> AdminRouter
 ```
 
 ---
 
-## 2. Core Capabilities
+## 2. Machine Learning Models & Workflows
 
-### Dual Independent Workflows
-- **Workflow A (Cancer Classification)**:
-  - Checkpoint: `backend/weights/cancer/final_densenet121.pth`
-  - Output Classes: `1. Benign`, `2. Malignant`, `3. Normal`
-  - Preprocessing: Cancer Crop V2 (top 12%, bottom 10%, left/right 6%) to remove machine markings, orientation markers, and bed borders.
-- **Workflow B (COVID / Pulmonary Disease)**:
-  - Checkpoint: `backend/weights/covid/final_densenet121.pth`
-  - Output Classes: `1. COVID-19`, `2. Normal`, `3. Other pulmonary disease`
-  - Preprocessing: Full aspect ratio preservation with black borders (no spatial crop) to retain peripheral subpleural disease hallmarks.
+The platform deploys two strictly independent DenseNet-121 networks trained on distinct cohorts with separate label spaces:
 
-### Scientific Multi-Slice Case Aggregation
-Rather than majority voting on discrete hard labels, the platform calculates the **arithmetic mean of slice-level softmax probability vectors**:
+### Workflow A: Thoracic Cancer Classification
+- **Model Checkpoint**: `backend/weights/cancer/final_densenet121.pth`
+- **Output Classes (exact order)**:
+  1. `Benign`
+  2. `Malignant`
+  3. `Normal`
+- **Preprocessing Pipeline**:
+  - RGB conversion (compositing transparent PNGs onto black background)
+  - **Cancer Crop V2**: Discards top 12%, bottom 10%, left 6%, right 6% to eliminate scanner bed borders and metadata markers
+  - Lanczos aspect-ratio preserved padding to 224 × 224
+  - Standard ImageNet channel normalization (`mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`)
+- **Verified Benchmarks**:
+  - Nested Group CV Pooled Macro F1: **0.7212**
+  - Independent Test Group Accuracy: **76.92%** (10/13 groups)
+  - Independent Test Macro F1: **0.7091**
+  - Independent Test Weighted F1: **0.7818**
+  - Independent Test Negative Log-Likelihood: **0.3576**
+
+### Workflow B: COVID / Pulmonary Disease Classification
+- **Model Checkpoint**: `backend/weights/covid/final_densenet121.pth`
+- **Output Classes (exact order)**:
+  1. `COVID-19`
+  2. `Normal`
+  3. `Other pulmonary disease`
+- **Preprocessing Pipeline**:
+  - RGB conversion
+  - **Aspect-Ratio Preservation**: No spatial cropping to ensure peripheral subpleural disease hallmarks remain intact
+  - Centered padding with black borders to 224 × 224 using Lanczos interpolation
+  - Standard ImageNet channel normalization
+- **Verified Benchmarks**:
+  - Nested Group CV Pooled Macro F1: **0.8242**
+  - Independent Test Group Accuracy: **78.13%** (25/32 groups)
+  - Independent Test Macro F1: **0.7775**
+  - Independent Test Weighted F1: **0.7810**
+  - Independent Test Negative Log-Likelihood: **0.4980**
+
+### Arithmetic Mean Softmax Aggregation
+For multi-slice CT series, case classification is computed by the arithmetic mean of per-slice softmax vectors:
 $$\bar{p}_c = \frac{1}{S} \sum_{s=1}^S p(c \mid s)$$
-$$\hat{y} = \arg\max_{c} \bar{p}_c$$
-
-### Privacy by Design
-- Anonymous auto-generated Case IDs (`CASE-CAN-XXXXXX`, `CASE-COV-XXXXXX`).
-- No patient names, MRNs, dates of birth, or identifiers are collected or persisted.
-- Uploaded scans are processed strictly in RAM and discarded immediately after inference.
-
-### Evaluation & Benchmark Visualizer
-- Interactive confusion matrices for both untouched independent test evaluation and pooled outer nested CV.
-- Exact class-wise precision, recall, F1, and support metrics from verified CSV evaluation logs.
-- Two-phase training convergence curves (classifier head warm-up vs full network fine-tuning).
+$$\hat{y}_{\text{case}} = \arg\max_{c} \bar{p}_c$$
 
 ---
 
-## 3. Repository Structure
+## 3. Production SaaS Architecture & Capabilities
 
-```
-├── backend/                              # Python FastAPI + PyTorch Backend
-│   ├── app/
-│   │   ├── api/routes.py                 # REST endpoint implementations
-│   │   ├── services/
-│   │   │   ├── inference.py              # DenseNet121 inference & mean softmax aggregation
-│   │   │   ├── metrics_service.py        # CSV evaluation parser
-│   │   │   ├── sample_scans.py           # Synthetic CT scan generator for demos/tests
-│   │   │   └── validation.py             # Format and dimension validation
-│   │   ├── config.py                     # App configuration & crop parameters
-│   │   ├── main.py                       # FastAPI application entrypoint
-│   │   └── schemas.py                    # Pydantic data schemas
-│   ├── weights/                          # Trained PyTorch model weights (.pth)
-│   │   ├── cancer/final_densenet121.pth
-│   │   └── covid/final_densenet121.pth
-│   ├── tests/                            # Comprehensive PyTest test suite (24 tests)
-│   ├── requirements.txt                  # Backend dependencies
-│   └── README.md                         # Detailed backend documentation
-├── frontend/                             # React 19 + TypeScript + Vite Frontend
-│   ├── src/
-│   │   ├── components/                   # Reusable UI components
-│   │   │   ├── CaseReportModal.tsx       # Printable & exportable case report
-│   │   │   ├── ConfusionMatrix.tsx       # Heatmap matrix visualizer
-│   │   │   ├── DisclaimerBanner.tsx      # Research warning banners
-│   │   │   ├── ImageUploader.tsx         # Drag & drop slice ingestion
-│   │   │   ├── Navbar.tsx                # Header with live backend status ping
-│   │   │   ├── ScoreDistributionChart.tsx# Recharts bar distribution
-│   │   │   ├── SliceTable.tsx            # Per-slice inspection table
-│   │   │   └── TrainingHistoryChart.tsx  # Convergence history curves
-│   │   ├── pages/
-│   │   │   ├── Dashboard.tsx             # Overview dashboard
-│   │   │   ├── MethodologyPage.tsx       # Documentation & model card
-│   │   │   ├── PerformancePage.tsx       # Official metrics & evaluation artifacts
-│   │   │   └── WorkflowPage.tsx          # Dual-workflow classification runner
-│   │   ├── services/api.ts               # Typed API client
-│   │   ├── types/index.ts                # TypeScript interfaces
-│   │   └── App.tsx                       # App router and layout
-│   ├── vite.config.ts                    # Vite config with API reverse proxy
-│   ├── package.json
-│   └── README.md                         # Frontend documentation
-├── docs/                                 # Evaluation artifacts & original model card
-├── model_development/                    # Source training logs & checkpoints
-├── MODEL_CARD.md                         # Comprehensive research model card
-├── .gitignore
-└── README.md                             # Project documentation
+1. **Multi-User Authentication**:
+   - Supabase Auth integration with local mock/dev fallback for offline evaluation.
+   - JWT decoding and independent cryptographic signature & expiry validation.
+   - Role-Based Access Control: `RESEARCHER` and `ADMIN`.
+2. **Persistent Case Registry**:
+   - Systematic case reference format: `CASE-CAN-XXXXXX` and `CASE-COV-XXXXXX`.
+   - Stores aggregated class score distributions, slice-level breakdown, and latency metrics.
+   - Strict Row-Level Security (RLS): Researchers can only view and manage their own cases.
+3. **Publication-Grade Report Generation**:
+   - **ReportLab PDF Engine**: Multi-page publication reports with dynamic page numbering ("Page X of Y"), aggregated findings, class distributions, full slice tables, and clinical disclaimers.
+   - **CSV Export**: Clean tabular export of slice-level predictions and score vectors.
+   - **JSON Schema**: Versioned machine-readable payload (`https://thoracicai.local/schemas/report-v1.json`).
+4. **Private Document Storage**:
+   - Supabase Storage support with short-lived signed URLs (15-minute expiration) and encrypted local filesystem fallback.
+5. **Administrative Console**:
+   - System telemetry (PyTorch device, loaded models, compute memory).
+   - User governance: activate, deactivate, and promote/demote roles.
+   - Immutable audit event logging (`audit_events` table).
+6. **Privacy by Design**:
+   - **Zero Raw Image Storage**: Uploaded CT slices are processed purely in-memory as PyTorch tensors and destroyed upon request completion.
+   - **No Protected Health Information (PHI)**: No patient names, MRNs, or identifying information are captured.
+
+---
+
+## 4. Local Development & Testing
+
+### Running the Backend
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
----
+### Running the Frontend
 
-## 4. Getting Started
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-### Prerequisites
-- Python 3.10+ (tested with Python 3.12)
-- Node.js 18+ (tested with Node v24)
-- npm 9+
+Open `http://localhost:5173` in your browser.
 
----
+### Automated Test Suites
 
-### Step 1: Start the Backend Service
-
-1. Open a terminal and navigate to `backend/`:
-   ```bash
-   cd backend
-   ```
-2. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Start the FastAPI application:
-   ```bash
-   python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-   ```
-4. Verify the backend is live:
-   - Health check: `http://127.0.0.1:8000/api/health`
-   - Interactive Swagger API documentation: `http://127.0.0.1:8000/docs`
-
----
-
-### Step 2: Start the Frontend Application
-
-1. Open a second terminal and navigate to `frontend/`:
-   ```bash
-   cd frontend
-   ```
-2. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-3. Launch the Vite development server:
-   ```bash
-   npm run dev
-   ```
-4. Open your browser and navigate to:
-   ```
-   http://localhost:5173
-   ```
-   *(All `/api` network requests are automatically proxied by Vite to the FastAPI backend at `http://127.0.0.1:8000`).*
-
----
-
-## 5. Testing & Verification
-
-The backend includes a 24-test suite validating every critical requirement:
-- Checkpoint loading & in-memory caching
-- Class mapping ordering for Cancer and COVID models
-- Cancer Crop V2 geometry and 224x224 tensor output
-- COVID aspect-ratio padding geometry
-- Alpha transparency channel compositing onto solid black
-- Arithmetic mean softmax aggregation mathematics
-- Single-slice warning flags
-- Rejection of corrupt files, tiny dimensions (< 16x16), and unsupported file extensions
-- REST endpoints (`/api/health`, `/api/models`, `/api/metrics`, `/api/predict/cancer`, `/api/predict/covid`)
-
-Run the test suite:
+**1. PyTest Backend Suite (44 Tests)**:
 ```bash
 cd backend
 python -m pytest -v
 ```
+Covers model caching, inference aggregation, file validation, authentication, JWT verification, case management, report generation, user isolation, and admin governance.
+
+**2. Playwright End-to-End Suite (6 Tests)**:
+```bash
+cd frontend
+npx playwright test
+```
+Covers full browser journeys: landing page, authentication, cancer and COVID multi-slice inference, PDF report download, Case Registry inspection, Report Centre downloads, and benchmark verification.
 
 ---
 
-## 6. Official Performance Benchmarks
+## 5. Cloud Deployment
 
-| Metric | Cancer Model (DenseNet121) | COVID / Pulmonary Model (DenseNet121) |
-| :--- | :--- | :--- |
-| **Output Classes** | Benign, Malignant, Normal | COVID-19, Normal, Other pulmonary |
-| **Development Cohort** | 875 images (69 leakage groups) | 3,553 images (178 leakage groups) |
-| **Nested CV Pooled Macro F1** | **0.7212** | **0.8242** |
-| **Nested CV Pooled Accuracy** | **76.81%** | **83.15%** |
-| **Independent Test Cohort** | 198 images (13 leakage groups) | 615 images (32 leakage groups) |
-| **Independent Test Accuracy** | **76.92%** | **78.13%** |
-| **Independent Test Macro F1** | **0.7091** | **0.7775** |
-| **Independent Test Weighted F1**| **0.7818** | **0.7810** |
-| **Independent Test NLL Loss** | **0.3576** | **0.4980** |
+See [DEPLOYMENT.md](file:///c:/Project/AI-Based%20Thoracic%20Disease%20Detection%20Using%20Chest%20CT%20Images/thoracicai_antigravity_handoff/DEPLOYMENT.md) for step-by-step instructions:
+- **Database & Auth**: Supabase PostgreSQL 16 with `migrations/001_initial_schema.sql`
+- **Backend Service**: Render Docker Web Service (`backend/Dockerfile`, `render.yaml`)
+- **Frontend SPA**: Vercel (`frontend/vercel.json`)
+- **Local Multi-Container**: `docker-compose.yml`
 
 ---
 
-## 7. License & Research Attribution
+## 6. License & Disclaimers
 
-This project is released under the MIT License for academic research, education, and portfolio review.
-Model checkpoints and datasets are used strictly under their respective academic fair-use terms.
+ThoracicAI is released strictly for academic evaluation and research purposes. It must not be deployed in clinical environments or used for human diagnostic determinations.

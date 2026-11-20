@@ -1,7 +1,7 @@
 """Pydantic schemas for request validation and response serialization."""
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -9,12 +9,17 @@ def get_utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ============================================================
+# HEALTH & METADATA SCHEMAS
+# ============================================================
+
 class HealthResponse(BaseModel):
     status: str = "healthy"
-    service: str = "ThoracicAI CT Research API"
+    service: str = "ThoracicAI Secure CT Research Platform"
     version: str = "1.0.0"
     device: str
     torch_version: str
+    database_connected: bool = True
     models_loaded: Dict[str, bool]
     timestamp: datetime = Field(default_factory=get_utc_now)
 
@@ -48,6 +53,28 @@ class ModelsResponse(BaseModel):
     count: int
 
 
+# ============================================================
+# USER & PROFILE SCHEMAS
+# ============================================================
+
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    display_name: str
+    role: str  # 'ADMIN' | 'RESEARCHER'
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProfileUpdateRequest(BaseModel):
+    display_name: str = Field(..., min_length=2, max_length=100)
+
+
+# ============================================================
+# INFERENCE & PREDICTION SCHEMAS
+# ============================================================
+
 class SlicePrediction(BaseModel):
     slice_index: int
     filename: str
@@ -58,6 +85,8 @@ class SlicePrediction(BaseModel):
 
 class PredictionResponse(BaseModel):
     case_id: str
+    case_reference: Optional[str] = None
+    case_database_id: Optional[str] = None
     dataset: str
     architecture: str = "DenseNet121"
     number_of_slices: int
@@ -67,12 +96,138 @@ class PredictionResponse(BaseModel):
     aggregation: str = "Arithmetic mean of per-slice softmax score vectors"
     processing_status: str = "completed"
     is_single_slice: bool
+    inference_duration_ms: Optional[int] = None
     disclaimer: str = (
         "Research prototype only. Not a medical device. "
         "Scores are uncalibrated model outputs, not clinical probabilities."
     )
     timestamp: datetime = Field(default_factory=get_utc_now)
 
+
+# ============================================================
+# CASE MANAGEMENT SCHEMAS
+# ============================================================
+
+class CaseSummaryItem(BaseModel):
+    id: str
+    case_reference: str
+    dataset: str
+    status: str
+    model_architecture: str
+    model_version: str
+    number_of_slices: int
+    predicted_class: Optional[str] = None
+    mean_scores: Optional[Dict[str, float]] = None
+    inference_duration_ms: Optional[int] = None
+    is_single_slice: bool
+    inference_duration_ms: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CaseDetailResponse(CaseSummaryItem):
+    slice_predictions: List[SlicePrediction]
+    reports: List["ReportSummaryItem"] = []
+
+
+class CaseListResponse(BaseModel):
+    cases: List[CaseSummaryItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+# ============================================================
+# REPORT SCHEMAS
+# ============================================================
+
+class ReportCreateRequest(BaseModel):
+    report_format: str = Field(..., pattern="^(PDF|CSV|JSON)$")
+
+
+class ReportSummaryItem(BaseModel):
+    id: str
+    case_id: str
+    case_reference: str
+    dataset: str
+    report_format: str
+    generation_status: str
+    file_size_bytes: int
+    download_url: Optional[str] = None
+    created_at: datetime
+
+
+class ReportListResponse(BaseModel):
+    reports: List[ReportSummaryItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+# ============================================================
+# ADMIN SCHEMAS
+# ============================================================
+
+class AdminUserItem(BaseModel):
+    id: str
+    email: str
+    display_name: str
+    role: str
+    is_active: bool
+    cases_count: int
+    reports_count: int
+    created_at: datetime
+
+
+class AdminUserListResponse(BaseModel):
+    users: List[AdminUserItem]
+    total: int
+
+
+class AdminUserUpdateRoleRequest(BaseModel):
+    role: str = Field(..., pattern="^(ADMIN|RESEARCHER)$")
+
+
+class AdminUserUpdateStatusRequest(BaseModel):
+    is_active: bool
+
+
+class AdminStatsResponse(BaseModel):
+    total_users: int
+    active_users: int
+    total_cases: int
+    completed_cases: int
+    failed_cases: int
+    total_reports: int
+    cancer_cases: int
+    covid_cases: int
+
+
+class AuditEventItem(BaseModel):
+    id: str
+    actor_id: Optional[str] = None
+    actor_email: Optional[str] = None
+    action: str
+    resource_type: str
+    resource_id: Optional[str] = None
+    request_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+
+class AuditListResponse(BaseModel):
+    events: List[AuditEventItem]
+    total: int
+    page: int
+    page_size: int
+
+
+# ============================================================
+# BENCHMARK & EVALUATION SCHEMAS
+# ============================================================
 
 class ConfusionMatrixData(BaseModel):
     labels: List[str]

@@ -137,9 +137,15 @@ def preprocess_image(image: Image.Image, dataset_name: str) -> torch.Tensor:
 def run_inference(
     dataset_name: str,
     image_payloads: List[Tuple[str, bytes]],
-    batch_size: int = settings.INFERENCE_BATCH_SIZE
-) -> PredictionResponse:
-    """Execute end-to-end multi-slice inference and arithmetic mean softmax score aggregation."""
+    batch_size: int = settings.INFERENCE_BATCH_SIZE,
+    case_reference: Optional[str] = None
+) -> Tuple[PredictionResponse, int]:
+    """Execute end-to-end multi-slice inference and arithmetic mean softmax score aggregation.
+    Returns (PredictionResponse, inference_duration_ms).
+    """
+    import time
+    start_time = time.perf_counter()
+
     registry = ModelRegistry.get_instance()
     model, _ = registry.load_model(dataset_name)
     class_names = settings.CLASS_NAMES[dataset_name]
@@ -200,12 +206,17 @@ def run_inference(
             )
         )
 
-    # Random anonymous Case ID
-    prefix = "CAN" if dataset_name == "cancer" else "COV"
-    case_id = f"CASE-{prefix}-{uuid.uuid4().hex[:8].upper()}"
+    # Calculate duration
+    duration_ms = int((time.perf_counter() - start_time) * 1000)
 
-    return PredictionResponse(
-        case_id=case_id,
+    # Random anonymous Case ID or assigned case_reference
+    if not case_reference:
+        prefix = "CAN" if dataset_name == "cancer" else "COV"
+        case_reference = f"CASE-{prefix}-{uuid.uuid4().hex[:8].upper()}"
+
+    resp = PredictionResponse(
+        case_id=case_reference,
+        case_reference=case_reference,
         dataset=dataset_name,
         architecture="DenseNet121",
         number_of_slices=len(tensors),
@@ -217,5 +228,8 @@ def run_inference(
         slice_predictions=slice_predictions,
         aggregation="Arithmetic mean of per-slice softmax score vectors",
         processing_status="completed",
-        is_single_slice=(len(tensors) == 1)
+        is_single_slice=(len(tensors) == 1),
+        inference_duration_ms=duration_ms
     )
+
+    return resp

@@ -1,14 +1,15 @@
-"""Configuration module for ThoracicAI Research Backend."""
+"""Configuration module for ThoracicAI Research & Classification Platform."""
 
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set
 import torch
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 WORKSPACE_DIR = BASE_DIR.parent
 
-# Locate model weights: check backend/weights first, then model_development/final_models
+
 def _resolve_checkpoint(dataset: str) -> Path:
     candidates = [
         BASE_DIR / "weights" / dataset / "final_densenet121.pth",
@@ -18,14 +19,39 @@ def _resolve_checkpoint(dataset: str) -> Path:
     for path in candidates:
         if path.exists():
             return path
-    # Default to standard path in backend weights
     return BASE_DIR / "weights" / dataset / "final_densenet121.pth"
 
 
-class Settings:
-    PROJECT_NAME: str = "ThoracicAI — CT Research & Classification Workbench"
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+    PROJECT_NAME: str = "ThoracicAI — Secure CT Research & Classification Platform"
     PROJECT_VERSION: str = "1.0.0"
     API_V1_PREFIX: str = "/api"
+    ENVIRONMENT: str = "development"
+
+    # Database Configuration (Supabase PostgreSQL in production, SQLite fallback in dev/test)
+    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'thoracicai.db'}")
+
+    # Supabase Auth & JWT Configuration
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    SUPABASE_JWT_SECRET: str = os.getenv(
+        "SUPABASE_JWT_SECRET",
+        "thoracicai-development-jwt-secret-key-at-least-32-chars-long"
+    )
+    JWT_ALGORITHM: str = "HS256"
+    JWT_AUDIENCE: str = "authenticated"
+
+    # Report Storage
+    STORAGE_DIR: Path = BASE_DIR / "storage" / "reports"
+    SUPABASE_STORAGE_BUCKET: str = "reports"
+    SIGNED_URL_EXPIRY_SECONDS: int = 900  # 15 minutes
 
     # Device configuration
     DEVICE: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,10 +88,10 @@ class Settings:
     }
 
     # Upload validation limits
-    SUPPORTED_EXTENSIONS: set[str] = {
+    SUPPORTED_EXTENSIONS: Set[str] = {
         ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"
     }
-    SUPPORTED_MIME_TYPES: set[str] = {
+    SUPPORTED_MIME_TYPES: Set[str] = {
         "image/png", "image/jpeg", "image/tiff", "image/bmp", "image/webp", "image/x-ms-bmp"
     }
     MIN_DIMENSION: int = 16
@@ -76,14 +102,22 @@ class Settings:
     # Inference batching
     INFERENCE_BATCH_SIZE: int = 16
 
+    # Security & Rate Limiting
+    RATE_LIMIT_INFERENCE: str = "20/minute"
+    RATE_LIMIT_STANDARD: str = "120/minute"
+
     # CORS configuration
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "*"  # Open for development
+        "https://thoracicai.vercel.app",
+        "*"
     ]
 
 
 settings = Settings()
+
+# Ensure storage directory exists
+settings.STORAGE_DIR.mkdir(parents=True, exist_ok=True)

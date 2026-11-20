@@ -8,6 +8,8 @@ export interface SlicePrediction {
 
 export interface PredictionResponse {
   case_id: string;
+  case_reference?: string;
+  case_database_id?: string;
   dataset: 'cancer' | 'covid';
   architecture: string;
   number_of_slices: number;
@@ -17,6 +19,7 @@ export interface PredictionResponse {
   aggregation: string;
   processing_status: string;
   is_single_slice: boolean;
+  inference_duration_ms?: number;
   disclaimer: string;
   timestamp: string;
 }
@@ -149,4 +152,146 @@ export interface UploadedSlicePreview {
   file: File;
   previewUrl: string;
   sizeBytes: number;
+}
+
+// ============================================================
+// AUTH & USER TYPES
+// ============================================================
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  display_name: string;
+  role: 'ADMIN' | 'RESEARCHER';
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
+// CASE MANAGEMENT TYPES
+// ============================================================
+
+export interface CaseItem {
+  id: string;
+  case_reference: string;
+  dataset: 'cancer' | 'covid';
+  status: string;
+  model_architecture: string;
+  model_version: string;
+  number_of_slices: number;
+  predicted_class: string;
+  mean_scores: Record<string, number>;
+  inference_duration_ms: number;
+  is_single_slice: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaseDetail extends CaseItem {
+  slice_predictions: SlicePrediction[];
+  reports: ReportItem[];
+}
+
+export interface CaseListResponse {
+  cases: CaseItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// ============================================================
+// REPORT TYPES
+// ============================================================
+
+export interface ReportItem {
+  id: string;
+  case_id: string;
+  case_reference: string;
+  dataset: 'cancer' | 'covid';
+  report_format: 'PDF' | 'CSV' | 'JSON';
+  generation_status: string;
+  file_size_bytes: number;
+  download_url?: string;
+  created_at: string;
+}
+
+export interface ReportListResponse {
+  reports: ReportItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// ============================================================
+// ADMIN TYPES
+// ============================================================
+
+export interface AdminStats {
+  total_users: number;
+  active_users: number;
+  total_cases: number;
+  completed_cases: number;
+  failed_cases: number;
+  total_reports: number;
+  cancer_cases: number;
+  covid_cases: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: 'ADMIN' | 'RESEARCHER';
+  is_active: boolean;
+  cases_count: number;
+  reports_count: number;
+  created_at: string;
+}
+
+export interface AdminUserListResponse {
+  users: AdminUser[];
+  total: number;
+}
+
+export interface AuditLogItem {
+  id: string;
+  actor_id?: string;
+  actor_email?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  request_id?: string;
+  ip_address?: string;
+  details?: Record<string, any>;
+  timestamp: string;
+}
+
+export interface AuditListResponse {
+  events: AuditLogItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AdminHealthResponse {
+  status: string;
+  pytorch_version: string;
+  device: string;
+  cuda_available: boolean;
+  gpu_info?: {
+    device_name: string;
+    allocated_mb: number;
+    reserved_mb: number;
+  } | null;
+  models: {
+    cancer: { loaded: boolean; architecture: string; classes: string[] };
+    covid: { loaded: boolean; architecture: string; classes: string[] };
+  };
+  storage: {
+    mode: string;
+    local_dir: string;
+  };
 }

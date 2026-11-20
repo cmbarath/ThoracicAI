@@ -29,6 +29,9 @@ export const PerformancePage: React.FC = () => {
       } catch (err: any) {
         if (isMounted) {
           setError(err.message || 'Failed loading evaluation metrics.');
+        }
+      } finally {
+        if (isMounted) {
           setIsLoading(false);
         }
       }

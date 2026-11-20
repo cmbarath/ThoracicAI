@@ -155,7 +155,6 @@ class ReportService:
 
         items = []
         for r in reports:
-            signed_url = StorageService.generate_signed_url(r.storage_path)
             items.append(
                 ReportSummaryItem(
                     id=str(r.id),
@@ -165,7 +164,7 @@ class ReportService:
                     report_format=r.report_format,
                     generation_status=r.generation_status,
                     file_size_bytes=r.file_size_bytes,
-                    download_url=signed_url,
+                    download_url=f"/api/reports/{r.id}/download",
                     created_at=r.created_at
                 )
             )

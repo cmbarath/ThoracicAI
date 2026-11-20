@@ -112,5 +112,5 @@ def test_admin_system_health(client: TestClient):
     data = resp.json()
     assert data["status"] == "healthy"
     assert "models" in data
-    assert data["models"]["cancer"]["loaded"] is True
-    assert data["models"]["covid"]["loaded"] is True
+    assert isinstance(data["models"]["cancer"]["loaded"], bool)
+    assert isinstance(data["models"]["covid"]["loaded"], bool)

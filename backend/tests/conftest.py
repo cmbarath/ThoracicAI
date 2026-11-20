@@ -23,6 +23,12 @@ test_engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
+# Bind test engine to DB session module for tests
+import app.db.session as session_module
+session_module.engine = test_engine
+session_module.SessionLocal = TestingSessionLocal
+session_module.init_db = lambda: Base.metadata.create_all(bind=test_engine)
+
 # Create all schema tables in test database
 Base.metadata.create_all(bind=test_engine)
 

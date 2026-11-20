@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import torch
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -20,19 +21,46 @@ from .services.inference import ModelRegistry
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan event to initialize DB schema and preload PyTorch models."""
+    """Lifespan event to initialize compute device, DB schema, and configure model loading."""
     print("[ThoracicAI] Initializing platform backend...")
-    init_db()
-    print("[ThoracicAI] Database tables initialized.")
+
+    # Configure PyTorch CPU single-thread runtime (Render 512MB & Cloud Run 1 vCPU optimization)
+    if settings.DEVICE.type == "cpu":
+        torch.set_num_threads(1)
+        try:
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            pass
+        print("[ThoracicAI] PyTorch CPU thread count pinned to 1 for memory efficiency.")
+
+    try:
+        init_db()
+        print("[ThoracicAI] Database tables initialized.")
+    except Exception as err:
+        print(f"[ThoracicAI] Note: Database initialization deferred or handled externally: {err}")
+
     print(f"[ThoracicAI] Compute device: {settings.DEVICE}")
+
     registry = ModelRegistry.get_instance()
-    registry.preload_all()
-    print("[ThoracicAI] DenseNet121 model checkpoints loaded successfully.")
+    if settings.PRELOAD_MODELS_ON_STARTUP:
+        registry.preload_all()
+        print("[ThoracicAI] DenseNet121 model checkpoints preloaded successfully.")
+    else:
+        print("[ThoracicAI] On-demand lazy model loading active (Render Free 512MB RAM mode).")
+
     yield
     print("[ThoracicAI] Shutting down service.")
 
 
-limiter = Limiter(key_func=get_remote_address)
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP taking Cloud Run and Render proxies into account."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=get_client_ip)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

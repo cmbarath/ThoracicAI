@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: str = "thoracicai-development-jwt-secret-key-at-least-32-chars-long"
     JWT_ALGORITHM: str = "HS256"
     JWT_AUDIENCE: str = "authenticated"
+    JWT_ALLOWED_ALGORITHMS: List[str] = ["HS256", "RS256", "ES256"]
+    JWT_ISSUER: Optional[str] = None
+
+    @property
+    def EXPECTED_ISSUER(self) -> str:
+        if self.JWT_ISSUER:
+            return self.JWT_ISSUER
+        if self.SUPABASE_URL:
+            clean_url = self.SUPABASE_URL.split("/rest/v1")[0].rstrip("/")
+            return f"{clean_url}/auth/v1"
+        return "thoracicai-auth"
 
     # Administrator Email Configuration
     ADMIN_EMAIL: str = ""
@@ -66,9 +77,12 @@ class Settings(BaseSettings):
     def EFFECTIVE_ANON_KEY(self) -> str:
         return self.SUPABASE_ANON_KEY or self.SUPABASE_KEY or ""
 
-    # Report Storage
+    # Report Storage & Cloud Providers
     STORAGE_DIR: Path = BASE_DIR / "storage" / "reports"
+    STORAGE_BACKEND: str = "supabase"  # "supabase", "gcs", or "local"
     SUPABASE_STORAGE_BUCKET: str = "reports"
+    GCS_BUCKET_NAME: str = "thoracicai-storage-2026"
+    GCP_PROJECT_ID: str = "project-9242b60b-f224-4c35-b04"
     SIGNED_URL_EXPIRY_SECONDS: int = 900  # 15 minutes
 
     # Device configuration
@@ -117,8 +131,12 @@ class Settings(BaseSettings):
     MAX_TOTAL_BYTES: int = 500 * 1024 * 1024     # 500 MB max aggregate upload
     MAX_IMAGE_COUNT: int = 120                   # Up to 120 slices per case
 
-    # Inference batching
-    INFERENCE_BATCH_SIZE: int = 16
+    # Inference batching & Concurrency Limits
+    INFERENCE_BATCH_SIZE: int = 8
+    PRELOAD_MODELS_ON_STARTUP: bool = False
+    MAX_LOADED_MODELS: int = 1
+    INFERENCE_SEMAPHORE_LIMIT: int = 1
+    INFERENCE_TIMEOUT_SECONDS: float = 30.0
 
     # Security & Rate Limiting
     RATE_LIMIT_INFERENCE: str = "20/minute"
@@ -131,6 +149,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://thoracicai.vercel.app",
+        "https://thoracic-ai.vercel.app",
         "*"
     ]
 

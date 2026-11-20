@@ -32,14 +32,21 @@ def generate_report(
             detail=f"Research case '{case_id}' was not found or access is restricted."
         )
 
-    report = ReportService.create_report(
-        db=db,
-        case=case,
-        user=current_user,
-        report_format=payload.report_format
-    )
+    try:
+        report = ReportService.create_report(
+            db=db,
+            case=case,
+            user=current_user,
+            report_format=payload.report_format
+        )
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(err)
+        )
 
-    signed_url = StorageService.generate_signed_url(report.storage_path)
+    # Prefer canonical authenticated streaming endpoint for downloads
+    download_url = f"/api/reports/{report.id}/download"
 
     return ReportSummaryItem(
         id=str(report.id),
@@ -49,7 +56,7 @@ def generate_report(
         report_format=report.report_format,
         generation_status=report.generation_status,
         file_size_bytes=report.file_size_bytes,
-        download_url=signed_url,
+        download_url=download_url,
         created_at=report.created_at
     )
 
@@ -82,15 +89,13 @@ def get_report_metadata(
     current_user: Profile = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> ReportSummaryItem:
-    """Fetch report details and fresh signed download URL."""
+    """Fetch report details and authenticated download URL."""
     report = ReportService.get_report_by_id(db, report_id, current_user)
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Report '{report_id}' was not found or access is restricted."
         )
-
-    signed_url = StorageService.generate_signed_url(report.storage_path)
 
     return ReportSummaryItem(
         id=str(report.id),
@@ -100,7 +105,7 @@ def get_report_metadata(
         report_format=report.report_format,
         generation_status=report.generation_status,
         file_size_bytes=report.file_size_bytes,
-        download_url=signed_url,
+        download_url=f"/api/reports/{report.id}/download",
         created_at=report.created_at
     )
 
@@ -125,6 +130,11 @@ def download_report(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The report file could not be located in storage."
+        )
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(err)
         )
 
     log_audit_event(
@@ -182,6 +192,11 @@ def download_local_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report file missing from disk."
         )
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(err)
+        )
 
     return Response(
         content=content,
@@ -201,7 +216,13 @@ def delete_report(
     db: Session = Depends(get_db)
 ):
     """Delete a generated report from storage and the database."""
-    deleted = ReportService.delete_report(db, report_id, current_user)
+    try:
+        deleted = ReportService.delete_report(db, report_id, current_user)
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(err)
+        )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

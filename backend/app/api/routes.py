@@ -1,7 +1,7 @@
 """FastAPI router implementing core REST endpoints for inference and metrics."""
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 import torch
 
@@ -120,6 +120,16 @@ async def predict_cancer(
             dataset_name="cancer",
             image_payloads=validated_payloads
         )
+    except RuntimeError as err:
+        if "busy" in str(err).lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(err)
+            ) from err
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Inference execution failed: {err}"
+        ) from err
     except Exception as err:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -180,6 +190,16 @@ async def predict_covid(
             dataset_name="covid",
             image_payloads=validated_payloads
         )
+    except RuntimeError as err:
+        if "busy" in str(err).lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(err)
+            ) from err
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Inference execution failed: {err}"
+        ) from err
     except Exception as err:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -249,6 +269,7 @@ def get_sample_scan_info(dataset: str) -> SampleScanInfo:
 @router.post("/predict/sample/{dataset}", response_model=PredictionResponse, tags=["Demo Samples"])
 def predict_sample_scan(
     dataset: str,
+    request: Request,
     current_user: Optional[Profile] = Depends(get_optional_user),
     db: Session = Depends(get_db)
 ) -> PredictionResponse:
@@ -260,7 +281,23 @@ def predict_sample_scan(
         )
 
     slices = get_sample_scan_slices(dataset)
-    result = run_inference(dataset_name=dataset, image_payloads=slices)
+    try:
+        result = run_inference(dataset_name=dataset, image_payloads=slices)
+    except RuntimeError as err:
+        if "busy" in str(err).lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(err)
+            ) from err
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sample inference failed: {err}"
+        ) from err
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sample inference failed: {err}"
+        ) from err
 
     if current_user:
         case = CaseService.create_and_complete_case(

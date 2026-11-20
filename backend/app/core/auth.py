@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
+from jwt import PyJWKClient, PyJWKError, PyJWKClientError
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -12,6 +13,23 @@ from ..db.session import get_db
 from ..models import Profile
 
 security = HTTPBearer(auto_error=False)
+
+# Singleton JWKS client cache mapped by URL
+_JWKS_CLIENTS: dict = {}
+
+
+def get_jwks_client(jwks_url: str) -> PyJWKClient:
+    global _JWKS_CLIENTS
+    if jwks_url not in _JWKS_CLIENTS:
+        _JWKS_CLIENTS[jwks_url] = PyJWKClient(
+            jwks_url,
+            cache_keys=True,
+            max_cached_keys=16,
+            cache_jwk_set=True,
+            lifespan=300,
+            timeout=10.0
+        )
+    return _JWKS_CLIENTS[jwks_url]
 
 
 def get_utc_now() -> datetime:
@@ -39,6 +57,7 @@ def create_access_token(
             "role": role
         },
         "aud": settings.JWT_AUDIENCE,
+        "iss": settings.EXPECTED_ISSUER,
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp())
     }
@@ -51,62 +70,162 @@ def create_access_token(
 
 
 def decode_jwt_token(token: str) -> dict:
-    """Decode and independently verify Supabase JWT token signature and expiry.
-    Falls back to Supabase Auth API verification if the token was signed with
-    the live Supabase cloud project JWT key.
+    """Decode and independently verify Supabase JWT token.
+    
+    Supports:
+    - Symmetric HMAC-SHA256 (HS256) via configured SUPABASE_JWT_SECRET.
+    - Asymmetric ECDSA / RSA (ES256, RS256) via Supabase project JWKS.
+    Enforces signature verification, expiration, subject claim, audience,
+    issuer, and algorithm whitelisting. Fails closed.
     """
-    try:
-        # First attempt: fast local HMAC verification with configured secret
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-            audience=settings.JWT_AUDIENCE,
-            options={
-                "verify_signature": True,
-                "verify_exp": True,
-                "verify_aud": False  # Avoid strict mismatch if custom audience used
-            }
-        )
-        return payload
-    except jwt.ExpiredSignatureError:
+    if not token or not isinstance(token, str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired. Please authenticate again.",
+            detail="Authentication token is missing or invalid.",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    except jwt.InvalidTokenError:
-        # Second attempt: verify with Supabase Auth endpoint if configured
-        clean_sb_url = settings.SUPABASE_URL.split("/rest/v1")[0].rstrip("/") if settings.SUPABASE_URL else ""
-        anon_key = settings.EFFECTIVE_ANON_KEY
-        if clean_sb_url and anon_key:
-            try:
-                import httpx
-                resp = httpx.get(
-                    f"{clean_sb_url}/auth/v1/user",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "apikey": anon_key
-                    },
-                    timeout=5.0
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return {
-                        "sub": data.get("id"),
-                        "email": data.get("email"),
-                        "user_metadata": data.get("user_metadata", {}),
-                        "app_metadata": data.get("app_metadata", {}),
-                        "aud": "authenticated"
-                    }
-            except Exception:
-                pass
 
+    # 1. Inspect unverified header for algorithm and kid
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token signature or session expired.",
+            detail="Malformed JWT token header.",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+    alg = unverified_header.get("alg")
+    allowed_algs = getattr(settings, "JWT_ALLOWED_ALGORITHMS", ["HS256", "RS256", "ES256"])
+    if not alg or alg not in allowed_algs:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unsupported or disallowed JWT algorithm: '{alg}'. Permitted: {allowed_algs}.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # 2. Decode & verify signature based on algorithm
+    payload: dict
+    if alg == "HS256":
+        secret = settings.SUPABASE_JWT_SECRET
+        if not secret:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="JWT secret is not configured for HS256 verification.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        try:
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256"],
+                options={"verify_signature": True, "verify_exp": True, "verify_aud": False}
+            )
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired. Please authenticate again.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        except jwt.InvalidSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token signature.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        except jwt.InvalidTokenError as err:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid token: {err}",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+    elif alg in ("RS256", "ES256"):
+        kid = unverified_header.get("kid")
+        if not kid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Asymmetric token ({alg}) header missing required 'kid' attribute.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+
+        clean_sb_url = settings.SUPABASE_URL.split("/rest/v1")[0].rstrip("/") if settings.SUPABASE_URL else ""
+        if not clean_sb_url:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Supabase URL not configured for JWKS asymmetric verification.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+
+        jwks_url = f"{clean_sb_url}/auth/v1/.well-known/jwks.json"
+        try:
+            jwks_client = get_jwks_client(jwks_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            key = signing_key.key
+        except (PyJWKClientError, PyJWKError, Exception) as err:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Unable to retrieve valid signing key for kid '{kid}': {err}",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+
+        try:
+            payload = jwt.decode(
+                token,
+                key,
+                algorithms=[alg],
+                options={"verify_signature": True, "verify_exp": True, "verify_aud": False}
+            )
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired. Please authenticate again.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        except jwt.InvalidSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid asymmetric token signature.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        except jwt.InvalidTokenError as err:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid asymmetric token: {err}",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+
+    # 3. Claims validation (Subject, Audience, Issuer)
+    # Validate Subject (sub)
+    sub = payload.get("sub")
+    if not sub or not str(sub).strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Malformed token: subject identifier ('sub') is missing or empty.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # Validate Audience (aud)
+    expected_aud = settings.JWT_AUDIENCE
+    aud = payload.get("aud")
+    aud_list = aud if isinstance(aud, list) else ([aud] if aud else [])
+    if expected_aud not in aud_list:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token audience ('aud'). Expected '{expected_aud}', got '{aud}'.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    # Validate Issuer (iss)
+    expected_iss = settings.EXPECTED_ISSUER
+    iss = payload.get("iss")
+    if iss and iss != expected_iss:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token issuer ('iss'). Expected '{expected_iss}', got '{iss}'.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    return payload
 
 
 def get_current_user(

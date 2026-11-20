@@ -1,0 +1,47 @@
+# ============================================================
+# Dockerignore for ThoracicAI Backend
+# Strictly prevents baking secrets, caches, and test artifacts
+# ============================================================
+
+# Security & Secrets (CRITICAL - NEVER BAKE INTO DOCKER IMAGE)
+.env
+.env.*
+!.env.example
+*.env
+*.env.txt
+secrets.json
+*.pem
+*.key
+
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local database & transient report storage
+*.db
+storage/
+storage/reports/*
+
+# Tests & test reports
+tests/
+test-results/
+playwright-report/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Version control & IDE artifacts
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

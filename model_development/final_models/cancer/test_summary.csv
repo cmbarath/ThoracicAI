@@ -1,0 +1,2 @@
+dataset,architecture,training_epochs,test_images,test_groups,test_group_accuracy,test_group_macro_f1,test_group_nll,test_group_weighted_f1
+cancer,DenseNet121,9,198,13,0.7692307692307693,0.709090909090909,0.35764879338554845,0.7818181818181819

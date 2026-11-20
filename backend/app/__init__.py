@@ -1,0 +1,1 @@
+"""ThoracicAI backend application package."""

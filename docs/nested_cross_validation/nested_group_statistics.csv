@@ -1,0 +1,55 @@
+dataset,outer_fold,partition,class_label,group_count,image_count
+cancer,1,inner_train,Benign,6,45
+cancer,1,inner_train,Malignant,14,198
+cancer,1,inner_train,Normal,16,165
+cancer,1,inner_validation,Benign,2,13
+cancer,1,inner_validation,Malignant,4,106
+cancer,1,inner_validation,Normal,4,46
+cancer,1,outer_evaluation,Benign,5,43
+cancer,1,outer_evaluation,Malignant,8,139
+cancer,1,outer_evaluation,Normal,10,120
+cancer,2,inner_train,Benign,7,55
+cancer,2,inner_train,Malignant,13,221
+cancer,2,inner_train,Normal,16,196
+cancer,2,inner_validation,Benign,2,15
+cancer,2,inner_validation,Malignant,4,49
+cancer,2,inner_validation,Normal,4,28
+cancer,2,outer_evaluation,Benign,4,31
+cancer,2,outer_evaluation,Malignant,9,173
+cancer,2,outer_evaluation,Normal,10,107
+cancer,3,inner_train,Benign,7,61
+cancer,3,inner_train,Malignant,13,210
+cancer,3,inner_train,Normal,16,166
+cancer,3,inner_validation,Benign,2,13
+cancer,3,inner_validation,Malignant,4,102
+cancer,3,inner_validation,Normal,4,61
+cancer,3,outer_evaluation,Benign,4,27
+cancer,3,outer_evaluation,Malignant,9,131
+cancer,3,outer_evaluation,Normal,10,104
+covid,1,inner_train,COVID-19,36,936
+covid,1,inner_train,Normal,22,331
+covid,1,inner_train,Other pulmonary disease,37,599
+covid,1,inner_validation,COVID-19,9,236
+covid,1,inner_validation,Normal,6,79
+covid,1,inner_validation,Other pulmonary disease,9,129
+covid,1,outer_evaluation,COVID-19,23,676
+covid,1,outer_evaluation,Normal,14,218
+covid,1,outer_evaluation,Other pulmonary disease,22,349
+covid,2,inner_train,COVID-19,36,1010
+covid,2,inner_train,Normal,23,333
+covid,2,inner_train,Other pulmonary disease,36,554
+covid,2,inner_validation,COVID-19,9,236
+covid,2,inner_validation,Normal,6,91
+covid,2,inner_validation,Other pulmonary disease,9,135
+covid,2,outer_evaluation,COVID-19,23,602
+covid,2,outer_evaluation,Normal,13,204
+covid,2,outer_evaluation,Other pulmonary disease,23,388
+covid,3,inner_train,COVID-19,36,1000
+covid,3,inner_train,Normal,22,338
+covid,3,inner_train,Other pulmonary disease,36,611
+covid,3,inner_validation,COVID-19,10,278
+covid,3,inner_validation,Normal,5,84
+covid,3,inner_validation,Other pulmonary disease,9,126
+covid,3,outer_evaluation,COVID-19,22,570
+covid,3,outer_evaluation,Normal,15,206
+covid,3,outer_evaluation,Other pulmonary disease,23,340

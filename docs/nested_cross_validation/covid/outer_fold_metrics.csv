@@ -1,0 +1,4 @@
+dataset,architecture,outer_fold,inner_train_groups,inner_validation_groups,outer_training_groups,outer_evaluation_groups,selected_epoch,selected_phase,inner_validation_group_nll,inner_validation_group_macro_f1,outer_group_accuracy,outer_group_macro_f1,outer_group_nll
+covid,densenet121,1,95,24,119,59,24,finetune,0.3240896173872398,0.9167557932263813,0.8305084745762712,0.8183501683501683,0.5463738780249118
+covid,densenet121,2,95,24,119,59,16,finetune,0.45113693000933264,0.8148148148148148,0.8813559322033898,0.8715404637390454,0.477808985719477
+covid,densenet121,3,94,24,118,60,11,finetune,0.5560640970690857,0.8196969696969697,0.7833333333333333,0.7846560846560847,0.4940416756141794

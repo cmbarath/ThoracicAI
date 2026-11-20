@@ -1,0 +1,2 @@
+dataset,architecture,outer_folds,total_outer_oof_groups,pooled_outer_group_accuracy,pooled_outer_group_macro_f1,mean_outer_fold_macro_f1,std_outer_fold_macro_f1,mean_selected_epoch
+cancer,densenet121,3,69,0.7681159420289855,0.7211579818031432,0.71411453470277,0.08323709986333573,8.333333333333334

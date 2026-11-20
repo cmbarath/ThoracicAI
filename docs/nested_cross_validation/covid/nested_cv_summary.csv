@@ -1,0 +1,2 @@
+dataset,architecture,outer_folds,total_outer_oof_groups,pooled_outer_group_accuracy,pooled_outer_group_macro_f1,mean_outer_fold_macro_f1,std_outer_fold_macro_f1,mean_selected_epoch
+covid,densenet121,3,178,0.8314606741573034,0.8241608248952191,0.8248489055817662,0.0438052396564831,17.0

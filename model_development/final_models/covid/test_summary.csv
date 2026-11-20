@@ -1,0 +1,2 @@
+dataset,architecture,training_epochs,test_images,test_groups,test_group_accuracy,test_group_macro_f1,test_group_nll,test_group_weighted_f1
+covid,DenseNet121,16,615,32,0.78125,0.7775362318840578,0.49801561629815383,0.7809782608695652

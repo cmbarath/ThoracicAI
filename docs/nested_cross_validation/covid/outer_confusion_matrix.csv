@@ -1,0 +1,4 @@
+,Predicted: COVID-19,Predicted: Normal,Predicted: Other pulmonary disease
+Actual: COVID-19,62,1,5
+Actual: Normal,0,36,6
+Actual: Other pulmonary disease,2,16,50

@@ -1,0 +1,4 @@
+,Predicted: Benign,Predicted: Malignant,Predicted: Normal
+Actual: Benign,1,0,1
+Actual: Malignant,0,5,0
+Actual: Normal,2,0,4

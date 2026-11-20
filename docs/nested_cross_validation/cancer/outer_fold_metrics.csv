@@ -1,0 +1,4 @@
+dataset,architecture,outer_fold,inner_train_groups,inner_validation_groups,outer_training_groups,outer_evaluation_groups,selected_epoch,selected_phase,inner_validation_group_nll,inner_validation_group_macro_f1,outer_group_accuracy,outer_group_macro_f1,outer_group_nll
+cancer,densenet121,1,36,10,46,23,2,head,0.7453027051292075,0.6,0.7391304347826086,0.6563492063492063,0.5851123709929272
+cancer,densenet121,2,36,10,46,23,14,finetune,0.5662139864895797,0.5281385281385281,0.8695652173913043,0.8095238095238094,0.36891494238675315
+cancer,densenet121,3,36,10,46,23,9,finetune,0.5931705104742369,0.5407407407407406,0.6956521739130435,0.676470588235294,0.708944395794731

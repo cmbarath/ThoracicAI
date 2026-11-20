@@ -158,8 +158,8 @@ class ReportService:
             signed_url = StorageService.generate_signed_url(r.storage_path)
             items.append(
                 ReportSummaryItem(
-                    id=r.id,
-                    case_id=r.case_id,
+                    id=str(r.id),
+                    case_id=str(r.case_id),
                     case_reference=r.case.case_reference,
                     dataset=r.case.dataset,
                     report_format=r.report_format,

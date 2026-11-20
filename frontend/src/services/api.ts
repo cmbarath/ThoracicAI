@@ -168,6 +168,22 @@ export async function updateProfile(displayName: string): Promise<UserProfile> {
   return res.json();
 }
 
+export async function fetchAuthConfig(): Promise<{
+  supabase_url: string | null;
+  supabase_anon_key: string | null;
+  auth_enabled: boolean;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/config`);
+    if (res.ok) {
+      return res.json();
+    }
+  } catch (err) {
+    console.warn('[ThoracicAI] Could not fetch remote auth config:', err);
+  }
+  return { supabase_url: null, supabase_anon_key: null, auth_enabled: false };
+}
+
 export async function requestDevToken(email: string, displayName: string, role = 'RESEARCHER') {
   const res = await fetch(`${API_BASE}/auth/dev-token`, {
     method: 'POST',
@@ -288,12 +304,17 @@ export async function downloadReportFile(reportId: string, filename: string): Pr
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
+  a.style.display = 'none';
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
+  setTimeout(() => {
+    if (a.parentNode) {
+      a.parentNode.removeChild(a);
+    }
+    window.URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 export async function deleteReport(reportId: string): Promise<void> {

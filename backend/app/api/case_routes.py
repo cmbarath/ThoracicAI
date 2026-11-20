@@ -70,8 +70,8 @@ def get_case_details(
     # Format associated reports
     report_items = [
         ReportSummaryItem(
-            id=r.id,
-            case_id=case.id,
+            id=str(r.id),
+            case_id=str(case.id),
             case_reference=case.case_reference,
             dataset=case.dataset,
             report_format=r.report_format,
@@ -84,7 +84,7 @@ def get_case_details(
     ]
 
     return CaseDetailResponse(
-        id=case.id,
+        id=str(case.id),
         case_reference=case.case_reference,
         dataset=case.dataset,
         status=case.status,

@@ -1,6 +1,21 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('End-to-End CT Inference & Reporting Workflow', () => {
+  test.beforeEach(async ({ page, request }) => {
+    // Obtain test researcher session token
+    const res = await request.post('http://localhost:8000/api/auth/dev-token', {
+      data: {
+        email: 'researcher@thoracicai.org',
+        display_name: 'Dr. Sarah Chen',
+        role: 'RESEARCHER',
+      },
+    });
+    const data = await res.json();
+    await page.addInitScript((token) => {
+      localStorage.setItem('thoracicai_token', token);
+    }, data.access_token);
+  });
+
   test('should run cancer sample inference, view results, and inspect in registry', async ({ page }) => {
     await page.goto('/');
 

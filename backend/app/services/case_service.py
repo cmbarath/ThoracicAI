@@ -118,7 +118,7 @@ class CaseService:
 
         summary_items = [
             CaseSummaryItem(
-                id=c.id,
+                id=str(c.id),
                 case_reference=c.case_reference,
                 dataset=c.dataset,
                 status=c.status,

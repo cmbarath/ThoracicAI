@@ -11,10 +11,12 @@ from ..models import Base
 connect_args = {}
 engine_kwargs = {}
 
-if settings.DATABASE_URL.startswith("sqlite"):
+db_url = settings.EFFECTIVE_DATABASE_URL
+
+if db_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
     # If in-memory or file SQLite
-    if ":memory:" in settings.DATABASE_URL:
+    if ":memory:" in db_url:
         engine_kwargs["poolclass"] = StaticPool
 else:
     # PostgreSQL (Supabase) pooling settings
@@ -23,7 +25,7 @@ else:
     engine_kwargs["pool_pre_ping"] = True
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    db_url,
     connect_args=connect_args,
     **engine_kwargs
 )

@@ -42,8 +42,8 @@ def generate_report(
     signed_url = StorageService.generate_signed_url(report.storage_path)
 
     return ReportSummaryItem(
-        id=report.id,
-        case_id=case.id,
+        id=str(report.id),
+        case_id=str(case.id),
         case_reference=case.case_reference,
         dataset=case.dataset,
         report_format=report.report_format,
@@ -93,8 +93,8 @@ def get_report_metadata(
     signed_url = StorageService.generate_signed_url(report.storage_path)
 
     return ReportSummaryItem(
-        id=report.id,
-        case_id=report.case_id,
+        id=str(report.id),
+        case_id=str(report.case_id),
         case_reference=report.case.case_reference,
         dataset=report.case.dataset,
         report_format=report.report_format,

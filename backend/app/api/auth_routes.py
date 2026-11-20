@@ -31,7 +31,7 @@ class TokenResponse(BaseModel):
 def get_my_profile(current_user: Profile = Depends(get_current_user)) -> UserProfileResponse:
     """Retrieve profile and permissions for currently authenticated user."""
     return UserProfileResponse(
-        id=current_user.id,
+        id=str(current_user.id),
         email=current_user.email,
         display_name=current_user.display_name,
         role=current_user.role,
@@ -52,17 +52,18 @@ def update_my_profile(
     db.commit()
     db.refresh(current_user)
 
+    user_id_str = str(current_user.id)
     log_audit_event(
         db=db,
-        actor_id=current_user.id,
+        actor_id=user_id_str,
         action="PROFILE_UPDATE",
         resource_type="profile",
-        resource_id=current_user.id,
+        resource_id=user_id_str,
         details={"display_name": current_user.display_name}
     )
 
     return UserProfileResponse(
-        id=current_user.id,
+        id=user_id_str,
         email=current_user.email,
         display_name=current_user.display_name,
         role=current_user.role,
@@ -86,13 +87,39 @@ def generate_dev_token(
             detail="Development token generation is disabled in production."
         )
 
-    # Check if profile already exists or create
-    profile = db.query(Profile).filter(Profile.email == payload.email).first()
+    from sqlalchemy import text
+    import uuid
+
+    clean_email = payload.email.lower().strip()
+    profile = db.query(Profile).filter(Profile.email == clean_email).first()
+
     if not profile:
-        import uuid
+        # Check if auth.users exists (Supabase PostgreSQL) and create auth user
+        try:
+            auth_user = db.execute(
+                text("SELECT id FROM auth.users WHERE LOWER(email) = :email LIMIT 1"),
+                {"email": clean_email}
+            ).fetchone()
+            if not auth_user:
+                user_id = str(uuid.uuid4())
+                db.execute(
+                    text("""
+                        INSERT INTO auth.users (id, email, aud, role, is_sso_user, is_anonymous)
+                        VALUES (:id, :email, 'authenticated', 'authenticated', false, false)
+                    """),
+                    {"id": user_id, "email": clean_email}
+                )
+                db.commit()
+            # Fetch profile auto-created by Supabase trigger
+            profile = db.query(Profile).filter(Profile.email == clean_email).first()
+        except Exception:
+            db.rollback()
+
+    if not profile:
+        # Fallback for local SQLite test environments without auth schema
         profile = Profile(
             id=str(uuid.uuid4()),
-            email=payload.email,
+            email=clean_email,
             display_name=payload.display_name or "Researcher",
             role=payload.role if payload.role in ("ADMIN", "RESEARCHER") else "RESEARCHER",
             is_active=True
@@ -101,26 +128,28 @@ def generate_dev_token(
         db.commit()
         db.refresh(profile)
     else:
-        # Update role if requested and ensure profile is active
+        # Update role and display name
         if payload.role and payload.role in ("ADMIN", "RESEARCHER"):
             profile.role = payload.role
-        if not profile.is_active:
-            profile.is_active = True
+        if payload.display_name:
+            profile.display_name = payload.display_name
+        profile.is_active = True
         db.commit()
         db.refresh(profile)
 
+    user_id_str = str(profile.id)
     token = create_access_token(
-        user_id=profile.id,
+        user_id=user_id_str,
         email=profile.email,
         role=profile.role
     )
 
     log_audit_event(
         db=db,
-        actor_id=profile.id,
+        actor_id=user_id_str,
         action="AUTH_LOGIN",
         resource_type="session",
-        resource_id=profile.id,
+        resource_id=user_id_str,
         details={"method": "dev_token"}
     )
 
@@ -128,7 +157,7 @@ def generate_dev_token(
         access_token=token,
         token_type="Bearer",
         user=UserProfileResponse(
-            id=profile.id,
+            id=user_id_str,
             email=profile.email,
             display_name=profile.display_name,
             role=profile.role,
@@ -137,3 +166,25 @@ def generate_dev_token(
             updated_at=profile.updated_at
         )
     )
+
+
+class AuthConfigResponse(BaseModel):
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
+    auth_enabled: bool = False
+
+
+@router.get("/config", response_model=AuthConfigResponse)
+def get_auth_config() -> AuthConfigResponse:
+    """Provide public authentication connection details to frontend clients.
+    Exposes only public URL and anon key; private secrets are never exposed.
+    """
+    raw_url = settings.SUPABASE_URL or ""
+    clean_url = raw_url.split("/rest/v1")[0].rstrip("/") if raw_url else None
+    anon_key = settings.EFFECTIVE_ANON_KEY or None
+    return AuthConfigResponse(
+        supabase_url=clean_url,
+        supabase_anon_key=anon_key,
+        auth_enabled=bool(clean_url and anon_key)
+    )
+

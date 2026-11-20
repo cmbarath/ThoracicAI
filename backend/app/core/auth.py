@@ -51,9 +51,12 @@ def create_access_token(
 
 
 def decode_jwt_token(token: str) -> dict:
-    """Decode and independently verify Supabase JWT token signature and expiry."""
+    """Decode and independently verify Supabase JWT token signature and expiry.
+    Falls back to Supabase Auth API verification if the token was signed with
+    the live Supabase cloud project JWT key.
+    """
     try:
-        # Decode verifying signature, audience, and expiration
+        # First attempt: fast local HMAC verification with configured secret
         payload = jwt.decode(
             token,
             settings.SUPABASE_JWT_SECRET,
@@ -72,10 +75,36 @@ def decode_jwt_token(token: str) -> dict:
             detail="Token has expired. Please authenticate again.",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    except jwt.InvalidTokenError as err:
+    except jwt.InvalidTokenError:
+        # Second attempt: verify with Supabase Auth endpoint if configured
+        clean_sb_url = settings.SUPABASE_URL.split("/rest/v1")[0].rstrip("/") if settings.SUPABASE_URL else ""
+        anon_key = settings.EFFECTIVE_ANON_KEY
+        if clean_sb_url and anon_key:
+            try:
+                import httpx
+                resp = httpx.get(
+                    f"{clean_sb_url}/auth/v1/user",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "apikey": anon_key
+                    },
+                    timeout=5.0
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return {
+                        "sub": data.get("id"),
+                        "email": data.get("email"),
+                        "user_metadata": data.get("user_metadata", {}),
+                        "app_metadata": data.get("app_metadata", {}),
+                        "aud": "authenticated"
+                    }
+            except Exception:
+                pass
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication token: {err}",
+            detail="Invalid authentication token signature or session expired.",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
@@ -105,27 +134,62 @@ def get_current_user(
     # Fetch profile from database
     profile = db.query(Profile).filter(Profile.id == user_id).first()
 
+    # If profile by ID wasn't found, check if a profile exists by email (e.g. from CLI preprovisioning)
+    if not profile and email:
+        profile = db.query(Profile).filter(Profile.email == email.strip().lower()).first()
+        if profile:
+            # Re-associate with authoritative Supabase auth ID
+            profile.id = user_id
+            db.commit()
+            db.refresh(profile)
+
+    # Check admin email eligibility
+    is_admin_email = bool(
+        settings.ADMIN_EMAIL and email and email.strip().lower() == settings.ADMIN_EMAIL.strip().lower()
+    )
+
     if not profile:
-        # Provision profile if missing (fallback for Supabase webhook latency)
-        role = payload.get("user_metadata", {}).get("role", "RESEARCHER")
-        if role not in ("ADMIN", "RESEARCHER"):
-            role = "RESEARCHER"
+        from sqlalchemy import text
+        # Ensure auth.users has entry if running against Supabase PostgreSQL
+        try:
+            auth_user = db.execute(
+                text("SELECT id FROM auth.users WHERE id = :id LIMIT 1"),
+                {"id": user_id}
+            ).fetchone()
+            if not auth_user and email:
+                db.execute(
+                    text("""
+                        INSERT INTO auth.users (id, email, aud, role, is_sso_user, is_anonymous)
+                        VALUES (:id, :email, 'authenticated', 'authenticated', false, false)
+                    """),
+                    {"id": user_id, "email": email.strip().lower()}
+                )
+                db.commit()
+                profile = db.query(Profile).filter(Profile.id == user_id).first()
+        except Exception:
+            db.rollback()
 
-        display_name = payload.get("user_metadata", {}).get(
-            "display_name",
-            email.split("@")[0] if email else "Researcher"
-        )
+        if not profile:
+            # Provision profile if missing (first-time login via Supabase Auth or SQLite fallback)
+            role = "ADMIN" if is_admin_email else payload.get("user_metadata", {}).get("role", "RESEARCHER")
+            if role not in ("ADMIN", "RESEARCHER"):
+                role = "RESEARCHER"
 
-        profile = Profile(
-            id=user_id,
-            email=email or f"{user_id}@thoracicai.local",
-            display_name=display_name,
-            role=role,
-            is_active=True
-        )
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
+            display_name = payload.get("user_metadata", {}).get(
+                "display_name",
+                email.split("@")[0].capitalize() if email else "Researcher"
+            )
+
+            profile = Profile(
+                id=user_id,
+                email=email or f"{user_id}@thoracicai.local",
+                display_name=display_name,
+                role=role,
+                is_active=True
+            )
+            db.add(profile)
+            db.commit()
+            db.refresh(profile)
 
     if not profile.is_active:
         raise HTTPException(

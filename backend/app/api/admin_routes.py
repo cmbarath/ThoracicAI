@@ -75,13 +75,13 @@ def list_admin_users(
 
     items = [
         AdminUserItem(
-            id=u.id,
+            id=str(u.id),
             email=u.email,
             display_name=u.display_name,
             role=u.role,
             is_active=u.is_active,
-            cases_count=case_counts.get(u.id, 0),
-            reports_count=report_counts.get(u.id, 0),
+            cases_count=case_counts.get(u.id, 0) or case_counts.get(str(u.id), 0),
+            reports_count=report_counts.get(u.id, 0) or report_counts.get(str(u.id), 0),
             created_at=u.created_at
         )
         for u in users
@@ -194,12 +194,12 @@ def list_audit_logs(
 
     items = [
         AuditEventItem(
-            id=e.id,
-            actor_id=e.actor_id,
+            id=str(e.id),
+            actor_id=str(e.actor_id) if e.actor_id else None,
             actor_email=e.actor.email if e.actor else None,
             action=e.action,
             resource_type=e.resource_type,
-            resource_id=e.resource_id,
+            resource_id=str(e.resource_id) if e.resource_id else None,
             request_id=e.request_id,
             ip_address=e.ip_address,
             details=e.details,

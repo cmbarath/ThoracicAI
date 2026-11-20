@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 import torch
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,18 +35,36 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Database Configuration (Supabase PostgreSQL in production, SQLite fallback in dev/test)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'thoracicai.db'}")
+    DATABASE_URL: Optional[str] = None
+    SUPABASE_DB_HOST: str = ""
+    SUPABASE_DB_PASSWORD: str = ""
+    Project_ID: str = ""
 
     # Supabase Auth & JWT Configuration
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
-    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    SUPABASE_JWT_SECRET: str = os.getenv(
-        "SUPABASE_JWT_SECRET",
-        "thoracicai-development-jwt-secret-key-at-least-32-chars-long"
-    )
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_KEY: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = "thoracicai-development-jwt-secret-key-at-least-32-chars-long"
     JWT_ALGORITHM: str = "HS256"
     JWT_AUDIENCE: str = "authenticated"
+
+    # Administrator Email Configuration
+    ADMIN_EMAIL: str = ""
+
+    @property
+    def EFFECTIVE_DATABASE_URL(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        if self.Project_ID and self.SUPABASE_DB_HOST and self.SUPABASE_DB_PASSWORD:
+            import urllib.parse
+            encoded_pw = urllib.parse.quote_plus(self.SUPABASE_DB_PASSWORD)
+            return f"postgresql://postgres.{self.Project_ID}:{encoded_pw}@aws-0-{self.SUPABASE_DB_HOST}.pooler.supabase.com:5432/postgres"
+        return f"sqlite:///{BASE_DIR / 'thoracicai.db'}"
+
+    @property
+    def EFFECTIVE_ANON_KEY(self) -> str:
+        return self.SUPABASE_ANON_KEY or self.SUPABASE_KEY or ""
 
     # Report Storage
     STORAGE_DIR: Path = BASE_DIR / "storage" / "reports"

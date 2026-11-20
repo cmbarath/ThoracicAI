@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.0+-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![PyTest](https://img.shields.io/badge/PyTest-44%20Passed-success)](https://docs.pytest.org/)
-[![Playwright](https://img.shields.io/badge/Playwright-6%20Passed-success)](https://playwright.dev/)
+[![Playwright](https://img.shields.io/badge/Playwright-7%20Passed-success)](https://playwright.dev/)
 
 **ThoracicAI** is an enterprise-grade clinical AI research platform for multi-slice chest CT classification. It integrates two independently trained ImageNet-pretrained **DenseNet-121** deep convolutional neural networks with leakage-group cross-validation, arithmetic mean softmax score aggregation, multi-user Supabase authentication, PostgreSQL Row-Level Security (RLS), and publication-grade ReportLab PDF generation.
 
@@ -178,12 +178,26 @@ python -m pytest -v
 ```
 Covers model caching, inference aggregation, file validation, authentication, JWT verification, case management, report generation, user isolation, and admin governance.
 
-**2. Playwright End-to-End Suite (6 Tests)**:
+**2. Playwright End-to-End Suite (7 Tests)**:
 ```bash
 cd frontend
 npx playwright test
 ```
-Covers full browser journeys: landing page, authentication, cancer and COVID multi-slice inference, PDF report download, Case Registry inspection, Report Centre downloads, and benchmark verification.
+Covers full browser journeys: landing page disclaimer, institutional user registration & sign-in, account settings & profile updates, admin Governance Center access, cancer and COVID multi-slice inference, PDF report generation, Case Registry inspection, Report Centre document verification and streaming downloads, and benchmark verification.
+
+### Administrator Setup & Role Management
+
+Administrator privileges are strictly controlled via setup utilities rather than automatic elevation:
+
+1. **Configure Administrator Email**:
+   Specify `ADMIN_EMAIL=your-admin@institution.org` in `backend/.env`.
+2. **Assign Role via CLI**:
+   Execute the dedicated bootstrap utility:
+   ```bash
+   python -m app.cli.set_admin your-admin@institution.org
+   ```
+3. **Controlled Role Revocation**:
+   Administrator access can be demoted to `RESEARCHER` or deactivated at any time via the Admin Governance Center without automatic re-promotion upon login.
 
 ---
 

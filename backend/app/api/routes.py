@@ -139,7 +139,7 @@ async def predict_cancer(
         )
         result.case_id = case.case_reference
         result.case_reference = case.case_reference
-        result.case_database_id = case.id
+        result.case_database_id = str(case.id)
 
         log_audit_event(
             db=db,
@@ -199,7 +199,7 @@ async def predict_covid(
         )
         result.case_id = case.case_reference
         result.case_reference = case.case_reference
-        result.case_database_id = case.id
+        result.case_database_id = str(case.id)
 
         log_audit_event(
             db=db,
@@ -275,6 +275,6 @@ def predict_sample_scan(
         )
         result.case_id = case.case_reference
         result.case_reference = case.case_reference
-        result.case_database_id = case.id
+        result.case_database_id = str(case.id)
 
     return result

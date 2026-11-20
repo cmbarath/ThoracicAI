@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 export function AccountSettings() {
-  const { user, token, updateDisplayName, switchRole } = useAuth();
+  const { user, token, updateDisplayName } = useAuth();
   const [displayName, setDisplayName] = useState(user?.display_name || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(
@@ -34,19 +34,6 @@ export function AccountSettings() {
     }
   };
 
-  const handleRoleToggle = async () => {
-    if (!user) return;
-    const nextRole = user.role === 'ADMIN' ? 'RESEARCHER' : 'ADMIN';
-    try {
-      await switchRole(nextRole);
-      setStatusMsg({
-        type: 'success',
-        text: `Switched session role to ${nextRole} for evaluation testing.`,
-      });
-    } catch (err: any) {
-      setStatusMsg({ type: 'error', text: `Failed to switch role: ${err.message}` });
-    }
-  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -138,9 +125,9 @@ export function AccountSettings() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-slate-950 border border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Current Assigned Role:</span>
+              <span className="text-xs text-slate-400">Assigned Institutional Role:</span>
               <span
-                className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${
+                className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
                   user?.role === 'ADMIN'
                     ? 'bg-rose-500/10 text-rose-300 border border-rose-500/30'
                     : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
@@ -156,12 +143,9 @@ export function AccountSettings() {
             </p>
           </div>
 
-          <button
-            onClick={handleRoleToggle}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-          >
-            Switch to {user?.role === 'ADMIN' ? 'RESEARCHER' : 'ADMIN'} (Demo Evaluation)
-          </button>
+          <div className="text-[11px] text-slate-500 font-mono px-3 py-1.5 rounded bg-slate-900 border border-slate-800">
+            RBAC Enforced
+          </div>
         </div>
       </div>
 
